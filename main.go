@@ -6,6 +6,7 @@ import (
     "io/ioutil"
     "log"
     "net/http"
+    "net/http/httputil"
 
     "github.com/julienschmidt/httprouter"
 )
@@ -55,9 +56,34 @@ func GetJson(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
     fmt.Fprintf(w, string(res))
 }
 
+func GetRequest() {
+    url := "http://google.co.jp"
+    req, _ := http.NewRequest("GET", url, nil)
+
+    client := new(http.Client)
+    resp, err := client.Do(req)
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+    defer resp.Body.Close()
+
+    dumpResp, _ := httputil.DumpResponse(resp, true)
+    fmt.Printf(string(dumpResp))
+
+    // byteArray, _ := ioutil.ReadAll(resp.Body)
+    // fmt.Println(string(byteArray))
+}
+
+func PostRequest() {
+
+}
+
 func main() {
     // HTTPルーターを初期化
     router := httprouter.New()
+
+    GetRequest()
 
     router.GET("/Index/:param", Index)
     router.POST("/GetJson", GetJson)
