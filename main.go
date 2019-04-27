@@ -6,7 +6,7 @@ import (
     "io/ioutil"
     "log"
     "net/http"
-    "net/http/httputil"
+    // "net/http/httputil"
 
     "github.com/julienschmidt/httprouter"
 )
@@ -68,9 +68,8 @@ func GetRequest() {
     }
     defer resp.Body.Close()
 
-    dumpResp, _ := httputil.DumpResponse(resp, true)
-    fmt.Printf(string(dumpResp))
-
+    fmt.Println(resp.StatusCode)
+    // dumpResp, _ := httputil.DumpResponse(resp, true)
     // byteArray, _ := ioutil.ReadAll(resp.Body)
     // fmt.Println(string(byteArray))
 }
