@@ -7,11 +7,13 @@ import (
     "log"
     "net/http"
     // "net/http/httputil"
+    "sync"
+    "time"
 
     "github.com/julienschmidt/httprouter"
 )
 
-func Index(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+func ClientGet(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
     res := p.ByName("param")
     // ヘッダーセット
     w.Header().Set("Content-Type", "application/json")
@@ -20,7 +22,7 @@ func Index(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
     fmt.Fprintf(w, res)
 }
 
-func GetJson(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+func ClientPost(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
     // 終了前に閉じる
     defer r.Body.Close()
 
@@ -56,19 +58,17 @@ func GetJson(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
     fmt.Fprintf(w, string(res))
 }
 
-func GetRequest() {
-    url := "http://google.co.jp"
+func GetRequest(client *http.Client, url string)(int) {
     req, _ := http.NewRequest("GET", url, nil)
 
-    client := new(http.Client)
     resp, err := client.Do(req)
     if err != nil {
         fmt.Println(err)
-        return
+        return 0
     }
     defer resp.Body.Close()
+    return resp.StatusCode
 
-    fmt.Println(resp.StatusCode)
     // dumpResp, _ := httputil.DumpResponse(resp, true)
     // byteArray, _ := ioutil.ReadAll(resp.Body)
     // fmt.Println(string(byteArray))
@@ -78,14 +78,47 @@ func PostRequest() {
 
 }
 
+func GetFunc(client *http.Client, url string, ch <-chan int, wg *sync.WaitGroup) {
+    log.Println(GetRequest(client, url), url)
+    <- ch
+    wg.Done()
+}
+
 func main() {
     // HTTPルーターを初期化
     router := httprouter.New()
 
-    GetRequest()
+    router.GET("/Index/:param", ClientGet)
+    router.POST("/Post", ClientPost)
 
-    router.GET("/Index/:param", Index)
-    router.POST("/GetJson", GetJson)
+    urls := []string {
+        "https://stackoverflow.com/",
+        "http://yahoo.co.jp",
+        "https://stackoverflow.com/",
+        "http://yahoo.co.jp",
+        "https://stackoverflow.com/",
+        "http://yahoo.co.jp",
+        "https://stackoverflow.com/",
+        "http://yahoo.co.jp",
+        "https://stackoverflow.com/",
+        "http://yahoo.co.jp"}
+
+    ch := make(chan int, 5)
+    wg := &sync.WaitGroup{}
+
+    log.Println(time.Now())
+    client := &http.Client{}
+
+    for _, url := range urls {
+        ch <- 1
+        wg.Add(1)
+        go GetFunc(client, url, ch, wg)
+    }
+    wg.Wait()
+
+    log.Println(time.Now())
+
+
 
     // Webサーバーを8080ポートで立ち上げる
     err := http.ListenAndServe(":8080", router)
