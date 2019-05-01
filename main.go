@@ -33,15 +33,25 @@ func ClientPost(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
         http.Error(w, err.Error(), http.StatusBadRequest)
         return
     }
-    var i1 interface{}
-    json.Unmarshal(bodyBytes, &i1)
-    urlArray := i1.(map[string]interface{})["urls"]
-    paramArray := i1.(map[string]interface{})["params"]
-    // for _, v := range urlArray {
-    //     log.Println(v.(map[string]interface{})["url"].(string))
-    // }
-    log.Println(urlArray)
-    log.Println(paramArray)
+
+    type T struct {
+        Urls []struct {
+            ID int `json:"id"`
+            Url string `json:"url"`
+        } `json:"urls"`
+        Params []struct {
+            ID int `json:"id"`
+            Key string `json:"key"`
+            Value string `json:"value"`
+        } `json:"params"`
+    }
+    var test T
+    json.Unmarshal(bodyBytes, &test)
+    log.Println(test)
+
+    for _, v := range test.Urls {
+        log.Println(v.Url)
+    }
 
     
     
