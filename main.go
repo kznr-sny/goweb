@@ -3,7 +3,7 @@ package main
 import (
     "encoding/json"
     "fmt"
-    // "io/ioutil"
+    "io/ioutil"
     "log"
     "net/http"
     // "net/http/httputil"
@@ -12,11 +12,6 @@ import (
 
     "github.com/julienschmidt/httprouter"
 )
-
-type Result struct {
-    url string
-    status int
-}
 
 func ClientGet(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
     res := p.ByName("param")
@@ -29,14 +24,33 @@ func ClientGet(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 }
 
 func ClientPost(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-    r.ParseForm()
-    urls := r.Form["urls[]"]
+    defer r.Body.Close()
 
-    result := []Result{}
+    // TODO: JSONで受けたデータ処理
+    bodyBytes, err := ioutil.ReadAll(r.Body)
+    if err != nil {
+        // 読み取り失敗時、400エラー
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return
+    }
+    var i1 interface{}
+    json.Unmarshal(bodyBytes, &i1)
+    urlArray := i1.(map[string]interface{})["urls"]
+    paramArray := i1.(map[string]interface{})["params"]
+    // for _, v := range urlArray {
+    //     log.Println(v.(map[string]interface{})["url"].(string))
+    // }
+    log.Println(urlArray)
+    log.Println(paramArray)
+
+    
+    
+    r.ParseForm()
+    urls := r.Form["urls[]"]    
+
+    var result []map[string]interface{}
 
     GetResult(urls, &result, false)
-
-    log.Println(result)
   
     res, err := json.Marshal(result)
     if err != nil {
@@ -52,7 +66,7 @@ func ClientPost(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
     fmt.Fprintf(w, string(res))
 }
 
-func GetRequest(client *http.Client, url string, ch <-chan int, wg *sync.WaitGroup, result *[]Result) {
+func GetRequest(client *http.Client, url string, ch <-chan int, wg *sync.WaitGroup, result *[]map[string]interface{}) {
     
     defer func() {
         <- ch
@@ -67,14 +81,14 @@ func GetRequest(client *http.Client, url string, ch <-chan int, wg *sync.WaitGro
     }
     defer resp.Body.Close()
 
-    *result = append(*result, Result{ url: url, status: resp.StatusCode })
+    *result = append(*result, map[string]interface{}{"url": url, "status": resp.StatusCode})
 }
 
 func PostRequest() {
 
 }
 
-func GetResult(urls []string, result *[]Result, isPost bool) {
+func GetResult(urls []string, result *[]map[string]interface{}, isPost bool) {
     ch := make(chan int, 5)
     wg := &sync.WaitGroup{}
 
