@@ -6,12 +6,13 @@ import (
     "io/ioutil"
     "log"
     "net/http"
-    // "net/http/httputil"
+    "net/url"
     "sync"
+    "strings"
     "time"
 
     "github.com/julienschmidt/httprouter"
-    "./model"
+    "github.com/kznr-sny/goweb/model"
 )
 
 func ClientGet(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
@@ -34,24 +35,12 @@ func ClientPost(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
         return
     }
 
-
-    var rd RequestData
-    dict := make(map[int][]ParamData)
+    var rd model.RequestData
+    var result []map[string]interface{}
 
     json.Unmarshal(bodyBytes, &rd)
-    log.Println(rd)
 
-    for _, v := range rd.Params {
-        if _, ok := dict[v.ID]; ok {
-            dict[v.ID] = append(dict[v.ID], ParamData{Key: v.Key, Value: v.Value})
-        } else {
-            var data []ParamData
-            dict[v.ID] = append(data, ParamData{Key: v.Key, Value: v.Value})
-        }
-    }
-
-    var result []map[string]interface{}
-    GetResult(rd.Urls, &result, rd.IsPost)
+    GetResult(rd, &result)
   
     res, err := json.Marshal(result)
     if err != nil {
@@ -67,14 +56,52 @@ func ClientPost(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
     fmt.Fprintf(w, string(res))
 }
 
-func GetRequest(client *http.Client, url string, ch <-chan int, wg *sync.WaitGroup, result *[]map[string]interface{}) {
+func GetResult(rd model.RequestData, result *[]map[string]interface{}) {
+    ch := make(chan int, 5)
+    wg := &sync.WaitGroup{}
+    dict := make(map[int][]model.ParamData)
+    client := &http.Client{}
+
+    if len(rd.Params) > 0 {
+        for _, v := range rd.Params {
+            if _, ok := dict[v.ID]; ok {
+                dict[v.ID] = append(dict[v.ID], model.ParamData{Key: v.Key, Value: v.Value})
+            } else {
+                var data []model.ParamData
+                dict[v.ID] = append(data, model.ParamData{Key: v.Key, Value: v.Value})
+            }
+        }
+    }
+    
+    log.Println(time.Now())
+
+    for _, uri := range rd.Uris {
+        if uri.Uri == "" {
+            continue
+        }
+        ch <- 1
+        wg.Add(1)
+        if rd.IsPost {
+            params := dict[uri.ID]
+            go PostRequest(client, uri.Uri, params, ch, wg, result)
+        } else {
+            go GetRequest(client, uri.Uri, ch, wg, result)
+        }
+        
+    }
+    wg.Wait()
+
+    log.Println(time.Now())
+}
+
+func GetRequest(client *http.Client, uri string, ch <-chan int, wg *sync.WaitGroup, result *[]map[string]interface{}) {
     
     defer func() {
         <- ch
         wg.Done()
     }()
 
-    req, _ := http.NewRequest("GET", url, nil)
+    req, _ := http.NewRequest("GET", uri, nil)
     resp, err := client.Do(req)
     if err != nil {
         fmt.Println(err)
@@ -82,37 +109,33 @@ func GetRequest(client *http.Client, url string, ch <-chan int, wg *sync.WaitGro
     }
     defer resp.Body.Close()
 
-    *result = append(*result, map[string]interface{}{"url": url, "status": resp.StatusCode})
+    *result = append(*result, map[string]interface{}{"uri": uri, "status": resp.StatusCode})
 }
 
-func PostRequest() {
+func PostRequest(client *http.Client, uri string, params []model.ParamData, ch <-chan int, wg *sync.WaitGroup, result *[]map[string]interface{}) {
 
-}
+    defer func() {
+        <- ch
+        wg.Done()
+    }()
 
-func GetResult(urls []UrlsData, result *[]map[string]interface{}, isPost bool) {
-    ch := make(chan int, 5)
-    wg := &sync.WaitGroup{}
-
-    log.Println(time.Now())
-
-    client := &http.Client{}
-
-    for _, url := range urls {
-        if url.Url == "" {
+    postParams := url.Values{}
+    for _, v := range params {
+        if (v.Key == "") || (v.Value == "") {
             continue
         }
-        ch <- 1
-        wg.Add(1)
-        if isPost {
-            break
-        } else {
-            go GetRequest(client, url.Url, ch, wg, result)
-        }
-        
+        postParams.Add(v.Key, v.Value)
     }
-    wg.Wait()
+    
+    req, _ := http.NewRequest("POST", uri, strings.NewReader(postParams.Encode()))
+    resp, err := client.Do(req)
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+    defer resp.Body.Close()
 
-    log.Println(time.Now())
+    *result = append(*result, map[string]interface{}{"uri": uri, "status": resp.StatusCode})    
 }
 
 func main() {

@@ -2,13 +2,13 @@ package model
 
 type RequestData struct {
 	IsPost bool `json:"isPost"`
-	Urls []UrlsData `json:"urls"`
+	Uris []UrisData `json:"uris"`
 	Params []ParamsData `json:"params"`
 }
 
-type UrlsData struct {
+type UrisData struct {
 	ID int `json:"id"`
-	Url string `json:"url"`
+	Uri string `json:"uri"`
 }
 
 type ParamsData struct {
