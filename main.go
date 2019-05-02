@@ -11,6 +11,7 @@ import (
     "time"
 
     "github.com/julienschmidt/httprouter"
+    "./model"
 )
 
 func ClientGet(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
@@ -26,7 +27,6 @@ func ClientGet(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 func ClientPost(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
     defer r.Body.Close()
 
-    // TODO: JSONで受けたデータ処理
     bodyBytes, err := ioutil.ReadAll(r.Body)
     if err != nil {
         // 読み取り失敗時、400エラー
@@ -34,33 +34,24 @@ func ClientPost(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
         return
     }
 
-    type T struct {
-        Urls []struct {
-            ID int `json:"id"`
-            Url string `json:"url"`
-        } `json:"urls"`
-        Params []struct {
-            ID int `json:"id"`
-            Key string `json:"key"`
-            Value string `json:"value"`
-        } `json:"params"`
-    }
-    var test T
-    json.Unmarshal(bodyBytes, &test)
-    log.Println(test)
 
-    for _, v := range test.Urls {
-        log.Println(v.Url)
-    }
+    var rd RequestData
+    dict := make(map[int][]ParamData)
 
-    
-    
-    r.ParseForm()
-    urls := r.Form["urls[]"]    
+    json.Unmarshal(bodyBytes, &rd)
+    log.Println(rd)
+
+    for _, v := range rd.Params {
+        if _, ok := dict[v.ID]; ok {
+            dict[v.ID] = append(dict[v.ID], ParamData{Key: v.Key, Value: v.Value})
+        } else {
+            var data []ParamData
+            dict[v.ID] = append(data, ParamData{Key: v.Key, Value: v.Value})
+        }
+    }
 
     var result []map[string]interface{}
-
-    GetResult(urls, &result, false)
+    GetResult(rd.Urls, &result, rd.IsPost)
   
     res, err := json.Marshal(result)
     if err != nil {
@@ -98,7 +89,7 @@ func PostRequest() {
 
 }
 
-func GetResult(urls []string, result *[]map[string]interface{}, isPost bool) {
+func GetResult(urls []UrlsData, result *[]map[string]interface{}, isPost bool) {
     ch := make(chan int, 5)
     wg := &sync.WaitGroup{}
 
@@ -107,7 +98,7 @@ func GetResult(urls []string, result *[]map[string]interface{}, isPost bool) {
     client := &http.Client{}
 
     for _, url := range urls {
-        if url == "" {
+        if url.Url == "" {
             continue
         }
         ch <- 1
@@ -115,7 +106,7 @@ func GetResult(urls []string, result *[]map[string]interface{}, isPost bool) {
         if isPost {
             break
         } else {
-            go GetRequest(client, url, ch, wg, result)
+            go GetRequest(client, url.Url, ch, wg, result)
         }
         
     }
